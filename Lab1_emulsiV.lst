@@ -1,0 +1,145 @@
+GAS LISTING Lab1_emulsiV.s 			page 1
+
+
+   1              	##################################################
+   2              	## Name:    Lab1_emulsiV.s  					##
+   3              	## Purpose:	Flashing LED with ~1Hz Frequenc		##
+   4              	## Author:	Eric Praetzel	 					##
+   5              	##################################################
+   6              	
+   7              	#Note that there are some discrepancies between venus and emulsiv:
+   8              	# 1) venus uses .globl (as is correct according to standard) not .global like emulsiv
+   9              	# 2) venus uses .asciiz not .asciz like emulsiv (which is correct according to standard)
+  10              	# 3) venus does not use .section, emulsiv does
+  11              	# 4) venus does not like dropping the offset, e.g.  sb x7,(x6) instead of sb x7,0(x6) is flagged wi
+  12              	
+  13              	    .text
+  14              	    .global __reset
+  15              	
+  16              	__reset:
+  17 0000 EF004002 		jal InitialSetup	# setup pointer for I/O and print welcome message, all LEDs are off 
+  18              	
+  19              	# Global variables
+  20              	# x2 is the Stack Pointer (SP) but will not be used for this Lab
+  21              	# x15 now points to the I/O at 0xD0000010
+  22              	
+  23              	# The code below turns the lights off, delays, will turn the lights on, and delay again
+  24              	# This is the long flowchart that should be made to work and then improved via the short flowchart
+  25              	
+  26              	next_out:		# "next_out" is a label that is a place in memory
+  27              	# perform a time delay by running the addi instruction 20,000 times
+  28 0004 B7620000 		li x5, 25000		# find the value that gives 1Hz flashing when Speed is 10 in the emulator
+  28      9382821A 
+  29              	
+  30              	delay:
+  31 000c 9382F2FF 		addi x5, x5, -1		# decrement the counter
+  32 0010 E39E02FE 	    bne x5, x0, delay	# compare and test to see if we're done - if not loop back and decrement agai
+  33              	
+  34              	change_led:
+  35 0014 13021200 		addi x4, x4, 1      #counter to estimate timing
+  36 0018 93C1F10F 		xori x3, x3, 255    #switches 8 bits from 0 --> 1 or 1 --> 0
+  37 001c 23A03700 		sw x3, (x15)		# write the value to the LED register in memory
+  38 0020 6FF05FFE 	    jal zero, next_out	# repeat the process forever by jumping back to next_out
+  39              	
+  40              	
+  41              	###########################################################################
+  42              	#
+  43              	# Code to perform any setup required
+  44              	#
+  45              	# Do not edit any code below this comment
+  46              	#
+  47              	# when done x15 holds the based address for the I/O 0xD000 0010
+  48              	#
+  49              	InitialSetup:
+  50              	
+  51 0024 17010000 	    la sp, __stack_pointer      # assign the default stack pointer address (register x2)
+  51      13010100 
+  52              	
+  53 002c 1301C1FF 	    addi sp, sp, -4             # push the return address to the stack
+  54 0030 23201100 	    sw ra, 0(sp)                # because we're calling another subroutine and need to preserve it
+  55              	
+GAS LISTING Lab1_emulsiV.s 			page 2
+
+
+  56 0034 97020000 	    la x5, WelcomeMessage
+  56      93820200 
+  57 003c EF00C002 	    jal PrintToScreen        #Print out a bootup message
+  58              	
+  59              	# Setup all 8 wires to output by writing a 0x00  , 0xff turns pins into inputs
+  60 0040 B70700D0 	    li x15, 0xD0000000
+  61 0044 13030000 	    li t1, 0x00
+  62 0048 23806700 	    sb t1, (x15)        # setup all pins to LEDs as output
+  63 004c 1303F00F 	    li t1, 0xff
+  64 0050 A3806700 	    sb t1, 1(x15)   # Setup all pins to switches as inputs
+  65              	
+  66 0054 B70700D0 	    li x15, 0xD0000010      # S1 points to the base I/O address, offset 0 = LEDS, offset 1 = switch
+  66      93870701 
+  67              	
+  68 005c 83200100 	    lw ra, 0(sp)
+  69 0060 13014100 	    addi sp, sp, 4             # pop the return address to the stack
+  70              	
+  71 0064 67800000 	    jr ra       # return to sender
+  72              	
+  73              	# Print a message to the Text Window of the emulator
+  74              	#
+  75              	# The message to be printed is pointed to by t0 (x5) and must be NULL terminated
+  76              	#
+  77              	# exit with x5 incremented to point to the NULL at the end of the string
+  78              	
+  79              	PrintToScreen:
+  80 0068 130181FF 	    addi sp, sp, -8             # push x6, x7 to the stack to preserve their values
+  81 006c 23227100 	    sw x7, 4(sp)
+  82 0070 23206100 	    sw x6, 0(sp)
+  83              	
+  84 0074 370300C0 	    li x6, 0xC0000000       # This is the address of the small text window in the lower right
+  85              	loop:
+  86 0078 83C30200 	    lbu x7, (x5)            # Read a byte from the string
+  87 007c 63880300 	    beq x7, zero, done      # Exit if we have read the NULL (0x00) character
+  88 0080 23007300 	    sb x7, (x6)             # Write the character (byte) to the Text Window
+  89 0084 93821200 	    addi x5, x5, 1          # Incrememt the point to the next character in the string
+  90 0088 E30800FE 	    beq zero, zero, loop
+  91              	done:
+  92              	
+  93 008c 03230100 	    lw x6, 0(sp)
+  94 0090 83234100 	    lw x7, 4(sp)
+  95 0094 13018100 	    addi sp, sp, 8             # pop x6, x7 from the stack
+  96 0098 67800000 	    jr ra
+  97              	
+  98              	
+  99              	    .data
+ 100              	
+ 101              	WelcomeMessage:
+ 102 0000 48656C6C 	    .asciz "Hello"		# enter any text you like; the asciz directive NULL terminates the string
+ 102      6F00
+ 103              	
+ 104              	# This section below automatically enables the LED and Switch I/O in the simulator
+ 105              	    .section gpio_config, "a"
+ 106              	
+ 107 0000 03030303 	leds: .byte 3, 3, 3, 3, 3, 3, 3, 3
+ 107      03030303 
+ 108 0008 02020202 	sws:  .byte 2, 2, 2, 2, 2, 2, 2, 2
+GAS LISTING Lab1_emulsiV.s 			page 3
+
+
+ 108      02020202 
+ 109              	
+GAS LISTING Lab1_emulsiV.s 			page 4
+
+
+DEFINED SYMBOLS
+      Lab1_emulsiV.s:16     .text:0000000000000000 __reset
+      Lab1_emulsiV.s:49     .text:0000000000000024 InitialSetup
+      Lab1_emulsiV.s:26     .text:0000000000000004 next_out
+      Lab1_emulsiV.s:30     .text:000000000000000c delay
+      Lab1_emulsiV.s:34     .text:0000000000000014 change_led
+      Lab1_emulsiV.s:101    .data:0000000000000000 WelcomeMessage
+      Lab1_emulsiV.s:79     .text:0000000000000068 PrintToScreen
+      Lab1_emulsiV.s:85     .text:0000000000000078 loop
+      Lab1_emulsiV.s:91     .text:000000000000008c done
+      Lab1_emulsiV.s:107    gpio_config:0000000000000000 leds
+      Lab1_emulsiV.s:108    gpio_config:0000000000000008 sws
+      Lab1_emulsiV.s:51     .text:0000000000000024 .L0 
+      Lab1_emulsiV.s:56     .text:0000000000000034 .L0 
+
+UNDEFINED SYMBOLS
+__stack_pointer
