@@ -1,6 +1,6 @@
 # Labs for ECE222
-##Completed
+## Completed
 * Lab 1
-##Uncompleted
+## Uncompleted
 * Lab 2
 * Lab 3
