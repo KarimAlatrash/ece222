@@ -1,0 +1,297 @@
+GAS LISTING Lab2_emulsiV.s 			page 1
+
+
+   1              	##################################################
+   2              	## Name:    Lab2_Solution.s  					##
+   3              	## Purpose:	Counting & Cylon LED ~5Hz Freq 	##
+   4              	## Author:	Eric Praetzel	 					##
+   5              	##################################################
+   6              	
+   7              	    .text
+   8              	    .global __reset
+   9              	
+  10              	__reset:
+  11 0000 EF000009 		jal InitialSetup 	# Perform any initial setup required for the LEDs, buttons and print welcome mes
+  12              	
+  13              	#  Global Variables 
+  14              	
+  15              	#	x0 holds the value 0 and the name 'zero' can be used instead
+  16              	# 	x1 holds the Return Address (ra) for subroutine calls and should not be used within a subroutine
+  17              	# 	x2 holds the Stack Pointer (sp) and should not be used as a general register
+  18              	# 	x14 = 0xD0000000 the base address for all General-purpose I/O devices to configure Direction, In
+  19              	#	x15 = 0xD0000010 the base address for General-purpose I/O _DATA_
+  20              	
+  21              	# To write to the LEDs: byte write with offsetup of zero using x15. ie 0(x15)
+  22              	
+  23              	# To read the switches byte read with an offset of 1: 1(x15) and the buttons are at offset 2 bytes.
+  24              	
+  25              	# the ABI register names (zero, ra, sp, gp, tp, t0, t1, t2 ...) can be used - but they ARE NOT disp
+  26              	# The simulator displays all registers with their base names of: x0, x1, x2 ... 
+  27              	
+  28              	# choose which program and run, comment out the other line, code the program, run make to build it,
+  29              	
+  30 0004 EF004000 		jal simple_counter		# jump to the simple_counter program
+  31              	
+  32              		#jal cylon_eye			# jump to the cylon Eye program
+  33              	
+  34              	
+  35              	################################################################################
+  36              	# Displaying on all eight LEDs a counter output
+  37              	#
+  38              	# write the counter value (held in x3) to the lowest 4 LEDs (lowest 4 bits)
+  39              	# read the slide switches and write them to the upper 4 LEDs
+  40              	#
+  41              	
+  42              	simple_counter:		# A simple counter that starts at zero and displays  the count as a binary number 
+  43              	
+  44 0008 B3010000 		add x3, zero, zero 	# a clear-as-mud way to load zero into a x3 - other math & logic instruction c
+  45              		
+  46              	display_count:
+  47 000c EF004006 		jal Timing_Loop		# delay for 0.2 seconds
+  48 0010 03831700 		lb x6, 1(x15)       # read the switch inputs at address 0xd000 0011 (register x15 + 1)
+  49              	# do some bit manipulation magic combinging the upper 4 bits of x6 (switches) and the lower four bi
+  50              	# into x5 which gets written to the eight LEDs
+  51 0014 93548301 		srli x9, x6, 24 #shifts x6 to look like 0x000000F0	
+  52 0018 93F4F40F 		andi x9, x9, 0x000000FF #masking operation
+  53              		
+  54 001c 13F4F100 		andi x8, x3, 0x0000000F #masking operation
+  55              		
+  56              		#and x5, x5, 0x0000000F #masks sign extension of x3
+  57              		#or x5, x5, x6 #brings in upper 4 bits from x6
+GAS LISTING Lab2_emulsiV.s 			page 2
+
+
+  58              		
+  59              	# This is done with masking & merging - a mask (AND) operation zeros bits you don't want and an mer
+  60 0020 B3828400 		add x5, x9, x8 #adds x3 to x5
+  61              	
+  62 0024 23805700 		sb x5, 0(x15)		# write out the value to the LEDs
+  63              	
+  64              	# increment the x3 counter
+  65 0028 93811100 		addi x3, x3, 1
+  66              	# one line of code to keep going back, to and display, delay, merge and count
+  67 002c EFF01FFE 		jal display_count
+  68              	
+  69              	
+  70              	###########################################################################
+  71              	#
+  72              	# Cylon Eye pattern
+  73              	#
+  74              	# Suggested registers for various functions:
+  75              	# x3 is the direction the LED is moving, 0 = moving left, 1 = moving right
+  76              	# x5 is the 8-bits written to the LED, only a single 1 should be in the entire byte
+  77              	#
+  78              	# LED Pattern for the eight LEDS
+  79              	#  0 0 0 0 0 0 0 1
+  80              	#  0 0 0 0 0 0 1 0
+  81              	#  0 0 0 0 0 1 0 0
+  82              	#  0 0 0 0 1 0 0 0
+  83              	#  0 0 0 1 0 0 0 0
+  84              	#  0 0 1 0 0 0 0 0
+  85              	#  0 1 0 0 0 0 0 0
+  86              	#  1 0 0 0 0 0 0 0
+  87              	#  0 1 0 0 0 0 0 0
+  88              	#  0 0 1 0 0 0 0 0
+  89              	#  0 0 0 1 0 0 0 0
+  90              	#  0 0 0 0 1 0 0 0
+  91              	#  0 0 0 0 0 1 0 0
+  92              	#  0 0 0 0 0 0 1 0
+  93              	#  0 0 0 0 0 0 0 1
+  94              	#  0 0 0 0 0 0 1 0 
+  95              	#  .....
+  96              	
+  97              	cylon_eye:
+  98 0030 93021000 		addi x5, zero, 1 	# set x5 to 1 so that the Cylon eye begins on the right
+  99 0034 B3010000 		add x3, zero, zero 	# direction - is the LED pattern shifting left (0) or right (1)?
+ 100 0038 13040008 		addi x8, zero, 0x80
+ 101              	
+ 102              	next_out:
+ 103 003c 23805700 		sb x5, 0(x15)		# store the byte into address 0xD000 0000 where the 8 LEDs are
+ 104              	
+ 105 0040 EF000003 		jal Timing_Loop		# delay for 0.2 seconds
+ 106              	
+ 107              	# Code to do the Cylon Eye
+ 108              	
+ 109              	# Lots of magic here involving testing the direction and checking if an end has been hit and if not
+ 110              	
+ 111              	# You will need to use the shift instructions: slli  slri for Shift Logical Left Immediate and Shif
+ 112              	
+ 113              	# some sample labels for one way to do this
+ 114              	
+GAS LISTING Lab2_emulsiV.s 			page 3
+
+
+ 115 0044 63880100 		beq x3, x0, left
+ 116              	
+ 117              	right:
+ 118 0048 93D21200 		srli x5, x5, 1
+ 119 004c 638A3200 		beq x5, x3, at_right_end
+ 120 0050 6FF0DFFE 		jal zero, next_out
+ 121              	
+ 122              	left: 
+ 123 0054 93921200 		slli x5, x5, 1
+ 124 0058 63888200 		beq x5, x8, at_left_end
+ 125 005c 6FF01FFE 		jal zero, next_out
+ 126              		
+ 127              	at_right_end:
+ 128 0060 B3010000 		add x3, zero, zero # if at either end then change direction
+ 129 0064 6FF09FFD 		jal zero, next_out
+ 130              		
+ 131              	at_left_end:
+ 132 0068 93011000 		addi x3, zero, 1
+ 133 006c 6FF01FFD 		jal zero, next_out
+ 134              		# change the number in the the x3 register as it indicates the direction
+ 135              	
+ 136              	
+ 137              	
+ 138              	###################################################################################################
+ 139              	#
+ 140              	# A simple timing loop that delays for ~0.2 seconds (5Hz counting speed)
+ 141              	#
+ 142              	###################################################################################################
+ 143              	Timing_Loop:
+ 144 0070 1301C1FF 		addi sp, sp, -4			# push x4 to the stack to preserve their values
+ 145 0074 23204100 		sw x4, 0(sp)
+ 146              	
+ 147 0078 37C20000 		li x4, 50000			# value of necessary to give ~0.2 second delay
+ 147      13020235 
+ 148              	delay:
+ 149 0080 1302F2FF 		addi x4, x4, -1			# decrement the counter
+ 150              	#	bxx .....	# compares the counter with zero to see if done, if not keep decrementing
+ 151              	
+ 152 0084 03220100 		lw x4, 0(sp)
+ 153 0088 13014100 		addi sp, sp, 4			# pop x6, x7 from the stack
+ 154 008c 67800000 		jr ra
+ 155              	
+ 156              	
+ 157              	
+ 158              	###################################################################################################
+ 159              	#
+ 160              	# Anything below here should not be modified but used as examples and basic functions to build upon
+ 161              	#
+ 162              	###################################################################################################
+ 163              	#
+ 164              	# Code to perform any setup required
+ 165              	#
+ 166              	# x15 holds the based address for the I/O at 0xD000 0010
+ 167              	#
+ 168              	InitialSetup:	
+ 169              	
+ 170 0090 17010000 		la sp, __stack_pointer		# assign the default stack pointer address (register x2)
+GAS LISTING Lab2_emulsiV.s 			page 4
+
+
+ 170      13010100 
+ 171              	
+ 172 0098 1301C1FF 		addi sp, sp, -4             # push the return address to the stack
+ 173 009c 23201100 		sw ra, 0(sp)				# because we're calling another subroutine and need to preserve it
+ 174              	
+ 175 00a0 97020000 	    la x5, BootMessage
+ 175      93820200 
+ 176 00a8 EF00C002 		jal PrintToScreen		 #Print out a bootup message
+ 177              	
+ 178              	# Setup all 8 wires to output by writing a 0x00  , 0xff turns pins into inputs
+ 179 00ac B70700D0 		li x15, 0xD0000000
+ 180 00b0 13030000 		li t1, 0x00
+ 181 00b4 23806700 		sb t1, (x15)		# setup all pins to LEDs as output
+ 182 00b8 1303F00F 		li t1, 0xff
+ 183 00bc A3806700 		sb t1, 1(x15)	# Setup all pins to switches as inputs
+ 184              	
+ 185 00c0 B70700D0 		li x15, 0xD0000010		# S1 points to the base I/O address, offset 0 = LEDS, offset 1 = switches
+ 185      93870701 
+ 186              	
+ 187 00c8 83200100 		lw ra, 0(sp)
+ 188 00cc 13014100 		addi sp, sp, 4             # pop the return address to the stack
+ 189              	
+ 190 00d0 67800000 		jr ra		# return to sender
+ 191              	
+ 192              	
+ 193              	###########################################################################
+ 194              	# Print a message to the Text Window of the emulator
+ 195              	#
+ 196              	# The message to be printed is pointed to by x5 (t0) and must be NULL terminated
+ 197              	#
+ 198              	# exit with x5 incremented to point to the NULL at the end of the string
+ 199              	
+ 200              	PrintToScreen:
+ 201 00d4 130181FF 		addi sp, sp, -8             # push x6, x7 to the stack to preserve their values
+ 202 00d8 23227100 		sw x7, 4(sp)
+ 203 00dc 23206100 		sw x6, 0(sp)
+ 204              	
+ 205 00e0 370300C0 	    li x6, 0xC0000000		# This is the address of the small text window in the lower right
+ 206              	loop:
+ 207 00e4 83C30200 	    lbu x7, (x5)			# Read a byte from the string
+ 208 00e8 63880300 	    beq x7, zero, done		# Exit if we have read the NULL (0x00) character
+ 209 00ec 23007300 	    sb x7, (x6)				# Write the character (byte) to the Text Window
+ 210 00f0 93821200 	    addi x5, x5, 1			# Incrememt the point to the next character
+ 211 00f4 E30800FE 		beq zero, zero, loop
+ 212              	done:
+ 213 00f8 03230100 		lw x6, 0(sp)
+ 214 00fc 83234100 		lw x7, 4(sp)
+ 215 0100 13018100 		addi sp, sp, 8             # pop x6, x7 from the stack
+ 216 0104 67800000 		jr ra
+ 217              	
+ 218              	
+ 219              	
+ 220              	##############################################################################################
+ 221              	# Now the data section of the program where strings can be stored and memory reserved for use
+ 222              	#
+ 223              	# Note .asciz adds a null termination at the end of a string while .ascii does not
+ 224              	#
+GAS LISTING Lab2_emulsiV.s 			page 5
+
+
+ 225              	# ASCII characters like \n (new line) and \r (carriage return) may be used in strings
+ 226              	
+ 227              	    .data
+ 228              	
+ 229              	BootMessage:
+ 230 0000 4C616220 	    .asciz "Lab 1 \n Counter and Cylon Eye at 5Hz\n"
+ 230      31200A20 
+ 230      436F756E 
+ 230      74657220 
+ 230      616E6420 
+ 231              	
+ 232              	DebuggingMessage:
+ 233 0026 57686174 	    .asciz "What Happened?\n"
+ 233      20486170 
+ 233      70656E65 
+ 233      643F0A00 
+ 234              	
+ 235              	################################################################################
+ 236              	# This section below automatically enables the LED and Switch I/O  in the emulator
+ 237              	################################################################################
+ 238              	
+ 239              	    .section gpio_config, "a"
+ 240              	
+ 241 0000 03030303 	leds: .byte 3, 3, 3, 3, 3, 3, 3, 3
+ 241      03030303 
+ 242              	#sws:  .byte 2, 2, 2, 2, 2, 2, 2, 2
+ 243              	#btns:  .byte 1, 1, 1, 1, 1, 1, 1, 1 
+GAS LISTING Lab2_emulsiV.s 			page 6
+
+
+DEFINED SYMBOLS
+      Lab2_emulsiV.s:10     .text:0000000000000000 __reset
+      Lab2_emulsiV.s:168    .text:0000000000000090 InitialSetup
+      Lab2_emulsiV.s:42     .text:0000000000000008 simple_counter
+      Lab2_emulsiV.s:46     .text:000000000000000c display_count
+      Lab2_emulsiV.s:143    .text:0000000000000070 Timing_Loop
+      Lab2_emulsiV.s:97     .text:0000000000000030 cylon_eye
+      Lab2_emulsiV.s:102    .text:000000000000003c next_out
+      Lab2_emulsiV.s:122    .text:0000000000000054 left
+      Lab2_emulsiV.s:117    .text:0000000000000048 right
+      Lab2_emulsiV.s:127    .text:0000000000000060 at_right_end
+      Lab2_emulsiV.s:131    .text:0000000000000068 at_left_end
+      Lab2_emulsiV.s:148    .text:0000000000000080 delay
+      Lab2_emulsiV.s:229    .data:0000000000000000 BootMessage
+      Lab2_emulsiV.s:200    .text:00000000000000d4 PrintToScreen
+      Lab2_emulsiV.s:206    .text:00000000000000e4 loop
+      Lab2_emulsiV.s:212    .text:00000000000000f8 done
+      Lab2_emulsiV.s:232    .data:0000000000000026 DebuggingMessage
+      Lab2_emulsiV.s:241    gpio_config:0000000000000000 leds
+      Lab2_emulsiV.s:170    .text:0000000000000090 .L0 
+      Lab2_emulsiV.s:175    .text:00000000000000a0 .L0 
+
+UNDEFINED SYMBOLS
+__stack_pointer
