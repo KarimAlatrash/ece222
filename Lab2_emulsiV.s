@@ -44,20 +44,17 @@ simple_counter:		# A simple counter that starts at zero and displays  the count 
 	add x3, zero, zero 	# a clear-as-mud way to load zero into a x3 - other math & logic instruction could be used
 	
 display_count:
-	jal Timing_Loop		# delay for 0.2 seconds
+	#jal Timing_Loop		# delay for 0.2 seconds
 	lb x6, 1(x15)       # read the switch inputs at address 0xd000 0011 (register x15 + 1)
 # do some bit manipulation magic combinging the upper 4 bits of x6 (switches) and the lower four bits of x3 (counter) 
 # into x5 which gets written to the eight LEDs
-	srli x9, x6, 24 #shifts x6 to look like 0x000000F0	
-	andi x9, x9, 0x000000FF #masking operation
+	#srli x9, x6, 24 #shifts x6 to look like 0x000000F0	
+	andi x9, x6, 0x000000F0 #masking operation
 	
 	andi x8, x3, 0x0000000F #masking operation
 	
-	#and x5, x5, 0x0000000F #masks sign extension of x3
-	#or x5, x5, x6 #brings in upper 4 bits from x6
-	
 # This is done with masking & merging - a mask (AND) operation zeros bits you don't want and an merge (OR) operation combines things
-	add x5, x9, x8 #adds x3 to x5
+	or x5, x9, x8 #combines x3 and x5
 
 	sb x5, 0(x15)		# write out the value to the LEDs
 
@@ -97,7 +94,7 @@ display_count:
 cylon_eye:
 	addi x5, zero, 1 	# set x5 to 1 so that the Cylon eye begins on the right
 	add x3, zero, zero 	# direction - is the LED pattern shifting left (0) or right (1)?
-	addi x8, zero, 0x80
+	addi x8, zero, 0x80 # last value in hex for the cylon eye to display
 
 next_out:
 	sb x5, 0(x15)		# store the byte into address 0xD000 0000 where the 8 LEDs are
@@ -112,26 +109,25 @@ next_out:
 
 # some sample labels for one way to do this
 
-	beq x3, x0, left
+	beq x3, x0, left #checks if currently shifting left or right
 
-right:
-	srli x5, x5, 1
-	beq x5, x3, at_right_end
-	jal zero, next_out
+right: #if left hasn't been triggered, enter this tag
+	srli x5, x5, 1 #increment the cylon eye rightwards
+	beq x5, x3, at_right_end #checks condition for being at edge of cylon eye
+	jal zero, next_out #reset loop
 
 left: 
 	slli x5, x5, 1
-	beq x5, x8, at_left_end
-	jal zero, next_out
+	beq x5, x8, at_left_end #checks condition for being at edge of cylon eye
+	jal zero, next_out #reset loop
 	
 at_right_end:
 	add x3, zero, zero # if at either end then change direction
-	jal zero, next_out
+	jal zero, next_out#reset loop
 	
 at_left_end:
-	addi x3, zero, 1
-	jal zero, next_out
-	# change the number in the the x3 register as it indicates the direction
+	addi x3, zero, 1 # if at either end then change direction
+	jal zero, next_out#reset loop
 
 
 
@@ -239,5 +235,5 @@ DebuggingMessage:
     .section gpio_config, "a"
 
 leds: .byte 3, 3, 3, 3, 3, 3, 3, 3
-#sws:  .byte 2, 2, 2, 2, 2, 2, 2, 2
-#btns:  .byte 1, 1, 1, 1, 1, 1, 1, 1 
+sws:  .byte 2, 2, 2, 2, 2, 2, 2, 2
+btns:  .byte 1, 1, 1, 1, 1, 1, 1, 1 
