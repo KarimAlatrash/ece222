@@ -1,0 +1,439 @@
+GAS LISTING Lab3_emulsiV.s 			page 1
+
+
+   1              	##################################################
+   2              	## Name:    Lab3_emulsiV.s  					##
+   3              	## Purpose:	Reaction Time                       ##
+   4              	## Author:	Eric Praetzel	 					##
+   5              	##################################################
+   6              	
+   7              	    .text
+   8              	    .global __reset
+   9              	
+  10              	# Post Lab Questions to answer:
+  11              	
+  12              	# 1-	With a 32-bit register counting reaction time in 0.1 milliseconds increments, what is the maxi
+  13              	
+  14              	# 2-	Considering typical human reaction time, which size would be the best for this task: 8, 16, 24
+  15              	
+  16              	# Important Register
+  17              	#	x12 holds the reaction time in 100us units - so 0x688 = 1672 * 100us => 0.167 seconds or 167ms
+  18              	
+  19              	
+  20              	#  Global Variables 
+  21              	
+  22              	#   x0 holds the value 0 and the name 'zero' can be used instead
+  23              	#   x1 holds the Return Address (ra) for subroutine calls and should not be used within a subroutin
+  24              	#   x2 holds the Stack Pointer (sp) and should not be used as a general register
+  25              	#   x14 = 0xD0000000 the base address for all General-purpose I/O devices to configure Direction, I
+  26              	#   x15 = 0xD0000010 the base address for General-purpose I/O _DATA_
+  27              	
+  28              	# To write to the LEDs: byte write with offsetup of zero using x15. ie 0(x15)
+  29              	
+  30              	# To read the switches byte read with an offset of 1: 1(x15) and the buttons are at offset 2 bytes.
+  31              	
+  32              	# the ABI register names (zero, ra, sp, gp, tp, t0, t1, t2 ...) can be used - but they ARE NOT disp
+  33              	# The simulator displays all registers with their base names of: x0, x1, x2 ... 
+  34              	
+  35              	__reset:
+  36 0000 EF00400B 		jal InitialSetup		# configure the I/O and print a welcome message - THIS NEEDS TO BE RUN BEFORE AN
+  37              	
+  38              	
+  39              		#jal loop_generating_random
+  40              	
+  41 0004 EF004002 		jal ReactionTime
+  42              	
+  43              	###########################################################################
+  44              	# first part - Generate & display random numbers with a time delay
+  45              	# display only the lowest 8 bits to the LEDs
+  46              	#
+  47              	
+  48              	loop_generating_random:
+  49 0008 83802700 		lb x1, 2(x15)			# poll the push buttons - read the button I/O port, 0 means a button is not presse
+  50              	
+  51 000c E38E00FE 		beq x1, zero, loop_generating_random		# keep looping until ANY button is pressed
+  52              	
+  53 0010 EF00001B 		jal RANDOM_NUM			# call the random number generator function - returns result in x10 (a0)
+  54              	
+  55 0014 2380A700 		sb x10, 0(x15)			# Write the LOWER 8 bits to the LEDs
+  56              	
+  57 0018 37150000 		li x10, 2500			# delay for 2500 * 100ms delay = 250 ms
+GAS LISTING Lab3_emulsiV.s 			page 2
+
+
+  57      1305459C 
+  58 0020 EF00C016 		jal DELAY				# delay call with x10 as input
+  59 0024 EFF05FFE 		jal loop_generating_random
+  60              	
+  61              	
+  62              	
+  63              	###########################################################################
+  64              	# Reaction Time Game
+  65              	#
+  66              	# The DELAY routine delays in increments of 100uS, so passing in 32432 results in a delay of 3.2432
+  67              	# 
+  68              	
+  69              	ReactionTime:
+  70 0028 97020000 	    la x5, StartMessage		# Print a message that the Reaction Time Game is starting
+  70      93820200 
+  71 0030 EF00800C 		jal PrintToScreen
+  72              	
+  73 0034 23800700 		sb zero, 0(x15)			# Turn the LEDs off
+  74              		
+  75              	GenRandomNum:
+  76 0038 EF008018 		jal RANDOM_NUM			# call the random number generator function - random number is in x10 and is betw
+  77              	
+  78              	# Add a base of 20000 to the random number to ensure a minimum 2 second delay
+  79 003c B7530000 		lui x7, 5
+  80 0040 938303E2 		addi x7, x7, -480 #twos complement to remove overflow 
+  81 0044 33057500 		add x10, x10, x7
+  82              	
+  83 0048 EF004014 		jal DELAY				# delay for that amount of time
+  84              	
+  85              	# The 2.0 to 8.55 second delay has happened (20000 to 85500 itterations of the 100us loop)
+  86              	
+  87              	# Now turn the LEDs on
+  88              	#   line of code needed here to put appropriate value into x5
+  89 004c 93021000 		addi x5, x0, 0x1
+  90 0050 23805700 		sb x5, 0(x15)			# Turn the LED on (lower 4 LEDs)
+  91              	
+  92              	#
+  93              	# Next initialize and then increment x12 every 100uS while checking for any button press - to count
+  94              	#
+  95 0054 13060000 		mv x12, zero			# Intialize the reaction counter to 0
+  96              	
+  97              	POLLING:
+  98 0058 13051000 		li x10, 1			
+  99 005c EF000013 		jal DELAY				# delay for 100us
+ 100              	
+ 101              	# increment the reaction counter
+ 102 0060 13061600 		addi x12, x12, 1
+ 103              	
+ 104              	# poll the push buttons for a press and loop back to POLLING until one is detected
+ 105 0064 83832700 		lb x7, 2(x15)			# poll the push buttons - read the button I/O port, 0 means a button is not presse
+ 106 0068 E38803FE 		beq x7, zero, POLLING		# keep looping until ANY button is pressed
+ 107              	
+ 108              	
+ 109              	# If we are here - a button press has been detected and the reaction time is in x12
+ 110              	# Acknowledge that the button has been pressed with a text message
+ 111              	#
+ 112 006c 97020000 	    la x5, NumberHeader		# print header for the reaction time number
+GAS LISTING Lab3_emulsiV.s 			page 3
+
+
+ 112      93820200 
+ 113 0074 EF004008 		jal PrintToScreen
+ 114              	
+ 115              	# The user may now halt the program and read the reaction time from the x12 register
+ 116              	
+ 117              	# Print the reaction time number in register x5 to the Text window
+ 118              	#
+ 119 0078 B302C000 		add x5, zero, x12		# move x12 into x5 and print it
+ 120 007c EF00000B 		jal PrintNumberToScreen	# print x5 to the Text window
+ 121              	
+ 122              	display_loop:				# Display the reaction time on the LEDs
+ 123              	
+ 124              		#let x6 be time
+ 125 0080 B305C000 		add x11, x0, x12
+ 126              		#let x7 be counter
+ 127 0084 93033000 		addi x7, x0, 3
+ 128              	
+ 129              		subloop:
+ 130 0088 2380B700 			sb x11, 0(x15)
+ 131              	
+ 132 008c 9383F3FF 			addi x7, x7, -1
+ 133 0090 93D58500 			srli x11, x11, 8
+ 134              			
+ 135              			#delay 0.5seconds
+ 136 0094 37150000 			lui x10, 1
+ 137 0098 13058538 			addi x10, x10, 904
+ 138 009c EF00000F 			jal DELAY
+ 139              	
+ 140 00a0 E39403FE 			bne x7, x0, subloop
+ 141              	
+ 142              		#delay 1s
+ 143 00a4 37250000 		lui x10, 2
+ 144 00a8 13050571 		addi x10, x10, 1808
+ 145 00ac EF00000E 		jal DELAY
+ 146              	
+ 147              	
+ 148 00b0 6FF01FFD 		j display_loop				# continuously showing the counter value
+ 149              	
+ 150              	
+ 151              	
+ 152              	###################################################################################################
+ 153              	#    DO NOT EDIT CODE BELOW THIS POINT !!
+ 154              	###################################################################################################
+ 155              	#
+ 156              	################################################################################
+ 157              	#
+ 158              	# Code to to the initial setup when the program is first run
+ 159              	#
+ 160              	################################################################################
+ 161              	InitialSetup:	
+ 162              	
+ 163 00b4 17010000 		la sp, __stack_pointer	# assign the default stack pointer address
+ 163      13010100 
+ 164              	
+ 165 00bc 1301C1FF 		addi sp, sp, -4             # push the return address to the stack
+ 166 00c0 23201100 		sw ra, 0(sp)				# because we're calling another subroutine and need to preserve it
+ 167              	
+GAS LISTING Lab3_emulsiV.s 			page 4
+
+
+ 168 00c4 97020000 	    la x5, BootMessage
+ 168      93820200 
+ 169 00cc EF00C002 		jal PrintToScreen		 #Print out a bootup message
+ 170              	
+ 171              	# Setup all 8 wires to output by writing a 0x00  , 0xff turns pins into inputs
+ 172 00d0 370700D0 		li x14, 0xD0000000
+ 173 00d4 23000700 		sb x0, (x14)		# setup all pins to LEDs as output by writing out 0x00
+ 174 00d8 1303F00F 		li t1, 0xff
+ 175 00dc A3006700 		sb t1, 1(x14)	# Setup all pins to switches as inputs
+ 176 00e0 23016700 		sb t1, 2(x14)	# Setup all pins to buttons as inputs
+ 177              	
+ 178 00e4 B70700D0 		li x15, 0xD0000010		# S1 points to the base I/O address, offset 0 = LEDS, offset 1 = switches
+ 178      93870701 
+ 179              	
+ 180 00ec 83200100 		lw ra, 0(sp)
+ 181 00f0 13014100 		addi sp, sp, 4             # pop the return address to the stack
+ 182              	
+ 183 00f4 67800000 		jr ra		# return to sender
+ 184              	
+ 185              	################################################################################
+ 186              	# Print a message to the Text Window
+ 187              	#
+ 188              	# The message to be printed is pointed to by t0 (x5) and must be NULL terminated
+ 189              	#
+ 190              	# exits with x5 incremented to the NULL at the end of the string
+ 191              	################################################################################
+ 192              	
+ 193              	PrintToScreen:
+ 194 00f8 130181FF 		addi sp, sp, -8             # push x6, x7 to the stack
+ 195 00fc 23227100 		sw x7, 4(sp)
+ 196 0100 23206100 		sw x6, 0(sp)
+ 197              	
+ 198 0104 370300C0 	    li x6, 0xC0000000
+ 199              	loop:
+ 200 0108 83C30200 	    lbu x7, (x5)			# Read a byte from the string
+ 201 010c 63880300 	    beq x7, zero, done		# Exit if we have read the NULL (0x00) character
+ 202 0110 23007300 	    sb x7, (x6)				# Write the character (byte) to the Text Window
+ 203 0114 93821200 	    addi x5, x5, 1			# Incrememt the point to the next character
+ 204 0118 E30800FE 		beq zero, zero, loop
+ 205              	done:
+ 206              	
+ 207 011c 03230100 		lw x6, 0(sp)
+ 208 0120 83234100 		lw x7, 4(sp)
+ 209 0124 13018100 		addi sp, sp, 8             # pop x6, x7 from the stack
+ 210 0128 67800000 		jr ra
+ 211              	
+ 212              	################################################################################
+ 213              	# Print a number to the Text Window on a new line
+ 214              	#
+ 215              	# The 32-bit (word) number to be printed is in x5
+ 216              	#
+ 217              	# ASCII characters 0 to 9 are 0x30 to 0x39, A is 0x41, B is 0x42 ....
+ 218              	
+ 219              	# printing is left to right so we must start with the most signif. nibble - print the lowest 20 bit
+ 220              	################################################################################
+ 221              	
+ 222              	PrintNumberToScreen:
+GAS LISTING Lab3_emulsiV.s 			page 5
+
+
+ 223 012c 130101FF 		addi sp, sp, -16	# push registers to the stack to preserve their values
+ 224 0130 23267100 		sw x7, 12(sp)
+ 225 0134 23244100 		sw x4, 8(sp)
+ 226 0138 23226100 		sw x6, 4(sp)
+ 227 013c 23208100 		sw x8, 0(sp)
+ 228              	
+ 229 0140 13028000 		li x4, 8			# x4 counts down from 5 to 0, one for each charcter printed
+ 230 0144 370400C0 	    li x8, 0xC0000000	# Point to the Text Window I/O port with x8
+ 231              	
+ 232              	PrintNextNumber:
+ 233 0148 370300F0 		li x6, 0xf0000000		# Mask data to only keep the 5th nibble
+ 234 014c B3F36200 		and x7, x5, x6		# prepare to print only the _most_ signif. nibble 0-9 or A-F
+ 235 0150 93D3C301 		srli x7, x7, 28		# shift the upper nibble down to the bottom for comparison and printing
+ 236 0154 13039000 		li x6, 9			# BLTU (Branch if less) BLEU (branch if less or equal) unsigned 
+ 237 0158 63747300 		bleu x7, x6, WasNumber
+ 238 015c 93837300 		addi x7, x7, 7		# Add 7 as the letters start 7 higher than the numbers
+ 239              	WasNumber:
+ 240 0160 93830303 		addi x7, x7, 0x30	# Add the base offset of 0x30 for ASCII character 0 as we display ASCII
+ 241 0164 23007400 	    sb x7, (x8)			# Write the character (byte) to the Text Window
+ 242              	
+ 243 0168 93924200 		slli x5, x5, 4				# shift off one nibble, 4 bits just displayed, and loop back to display what is 
+ 244 016c 1302F2FF 		addi x4, x4, -1		# Decrement character counter and test if we're done
+ 245 0170 E31C02FC 	    bne x4, zero, PrintNextNumber		# Exit if we have printed all characters
+ 246              	
+ 247              	NumberDone:
+ 248 0174 23267100 		sw x7, 12(sp)
+ 249 0178 23244100 		sw x4, 8(sp)
+ 250 017c 23226100 		sw x6, 4(sp)
+ 251 0180 23208100 		sw x8, 0(sp)
+ 252 0184 13010101 		addi sp, sp, 16		# pop x4, x6 from the stack
+ 253              	
+ 254 0188 67800000 		jr ra
+ 255              	
+ 256              	###########################################################################
+ 257              	# Input x10 (a0) set the time delay to a0 * 100uS
+ 258              	#
+ 259              	# If x10 = 0 then the time delay will be huge (2^32 * 100uS)
+ 260              	#
+ 261              	# returns with x10 = 0
+ 262              	#
+ 263              	# This is an intentionally BADLY DESIGNED timing loop - do not copy it
+ 264              	#     as you should have made a better loop in Lab 1!!!
+ 265              	# 
+ 266              	################################################################################
+ 267              	DELAY:
+ 268 018c 130181FF 		addi sp, sp, -8             # push x6, x7 to the stack to preserve their values
+ 269 0190 23207100 		sw x7, 0(sp)
+ 270 0194 23226100 		sw x6, 4(sp)
+ 271              	
+ 272              		outer_loop:
+ 273 0198 1303A000 			li x6, 10						# 100,000 = 1 sec, so 100uS = 10 loops
+ 274 019c 93030000 			addi x7, zero, 0				# set x7 = 0 for counting up
+ 275              			delay_loop:
+ 276 01a0 93831300 				addi x7, x7, 1				# decrement the delay counter
+ 277 01a4 E37E73FE 				bgeu x6, x7, delay_loop	# compares the delay counter with the max, if not equal it returns to th
+ 278 01a8 1305F5FF 			addi x10, x10, -1					# decrement number of delays counter
+ 279 01ac E31605FE 			bne x10, zero, outer_loop		# compares the number of delays counter with the max, if not equal it 
+GAS LISTING Lab3_emulsiV.s 			page 6
+
+
+ 280              	
+ 281 01b0 23226100 		sw x6, 4(sp)
+ 282 01b4 83230100 		lw x7, 0(sp)
+ 283 01b8 13018100 		addi sp, sp, 8             # pop x6, x7 from the stack
+ 284 01bc 67800000 		jr ra
+ 285              	
+ 286              	
+ 287              	
+ 288              	################################################################################
+ 289              	# Generate a random number between 1 and 0xffff
+ 290              	#
+ 291              	# Return a0 (x10) with the random number
+ 292              	#
+ 293              	# saves, uses and restores registers gp, t0, t1, t2 (x3, x5, x6, x7)
+ 294              	#
+ 295              	################################################################################
+ 296              	
+ 297              	RANDOM_NUM:
+ 298 01c0 130101FF 		addi sp, sp, -16			# push t0,t1,t2 to the stack to preserve their values
+ 299 01c4 23205100 		sw t0, 0(sp)
+ 300 01c8 23226100 		sw t1, 4(sp)
+ 301 01cc 23247100 		sw t2, 8(sp)
+ 302 01d0 23263100 		sw gp, 12(sp)
+ 303              	
+ 304 01d4 97010000 		la gp, SEED					# load the last random number
+ 304      93810100 
+ 305              	
+ 306 01dc 83A20100 		lw t0, 0(gp)				# load the seed or the last previously generated number from the data memory to t0
+ 307 01e0 37830000 		li t1, 0x8000
+ 308 01e4 B3F36200 		and t2, t0, t1				# mask bit 16 from the seed
+ 309 01e8 37230000 		li t1, 0x2000
+ 310 01ec 33F36200 		and t1, t0, t1				# mask bit 14 from the seed
+ 311 01f0 13132300 		slli t1, t1, 2				# allign bit 14 to be at the position of bit 16
+ 312 01f4 B3C36300 		xor t2, t2, t1				# xor bit 14 with bit 16
+ 313 01f8 37130000 		li t1, 0x1000		
+ 314 01fc 33F36200 		and t1, t0, t1				# mask bit 13 from the seed
+ 315 0200 13133300 		slli t1, t1, 3				# allign bit 13 to be at the position of bit 16
+ 316 0204 B3C36300 		xor t2, t2, t1				# xor bit 13 with bit 14 and bit 16
+ 317 0208 13030040 		li t1, 0x400
+ 318 020c 33F36200 		and t1, t0, t1				# mask bit 11 from the seed
+ 319 0210 13135300 		slli t1, t1, 5				# allign bit 14 to be at the position of bit 16
+ 320 0214 B3C36300 		xor t2, t2, t1				# xor bit 11 with bit 13, bit 14 and bit 16
+ 321 0218 93D3F300 		srli t2, t2, 15				# shift the xoe result to the right to be the LSB
+ 322 021c 93921200 		slli t0, t0, 1				# shift the seed to the left by 1
+ 323 0220 B3E27200 		or t0, t0, t2				# add the XOR result to the shifted seed 
+ 324 0224 37030100 		li t1, 0xFFFF				
+ 324      1303F3FF 
+ 325 022c B3F26200 		and t0, t0, t1				# clean the upper 16 bits to stay 0
+ 326 0230 23A05100 		sw t0, 0(gp)				# store the generated number to the data memory to be the new seed
+ 327 0234 13850200 		mv a0, t0					# copy t0 to a0 as a0 is always the return value of any function
+ 328              	
+ 329 0238 8321C100 		lw gp, 12(sp)
+ 330 023c 83238100 		lw t2, 8(sp)
+ 331 0240 03234100 		lw t1, 4(sp)
+ 332 0244 83220100 		lw t0, 0(sp)
+ 333 0248 13010101 		addi sp, sp, 16				# pop t0,t1,t2 from the stack
+ 334              		
+GAS LISTING Lab3_emulsiV.s 			page 7
+
+
+ 335 024c 67800000 		jr ra
+ 336              	
+ 337              	
+ 338              	# Data for the program
+ 339              	#
+ 340              	    .data
+ 341              	BootMessage:
+ 342 0000 52656163 	    .asciz "Reaction Time - Press any button when the LEDs turn on\n"
+ 342      74696F6E 
+ 342      2054696D 
+ 342      65202D20 
+ 342      50726573 
+ 343              	StartMessage:
+ 344 0038 47655420 	    .asciz "GeT READY\n"
+ 344      52454144 
+ 344      590A00
+ 345              	FinishMessage:
+ 346 0043 446F6E65 	    .asciz "Done!\n"
+ 346      210A00
+ 347              	NumberHeader:
+ 348 004a 0A44656C 	    .asciz "\nDelay: 0x"
+ 348      61793A20 
+ 348      307800
+ 349              	SEED:
+ 350 0055 14000000 		.word 0x14				# Put any non zero seed for the Random Number Generator - this must be writable memo
+ 351              	
+ 352              	# This section below automatically enables the LED and Switch I/O  in the emulator
+ 353              	#
+ 354              	    .section gpio_config, "a"
+ 355              	
+ 356 0000 03030303 	leds: .byte 3, 3, 3, 3, 3, 3, 3, 3
+ 356      03030303 
+ 357 0008 02020202 	sws:  .byte 2, 2, 2, 2, 2, 2, 2, 2
+ 357      02020202 
+ 358 0010 01010101 	btns:  .byte 1, 1, 1, 1, 1, 1, 1, 1 
+ 358      01010101 
+ 359              	
+GAS LISTING Lab3_emulsiV.s 			page 8
+
+
+DEFINED SYMBOLS
+      Lab3_emulsiV.s:35     .text:0000000000000000 __reset
+      Lab3_emulsiV.s:161    .text:00000000000000b4 InitialSetup
+      Lab3_emulsiV.s:69     .text:0000000000000028 ReactionTime
+      Lab3_emulsiV.s:48     .text:0000000000000008 loop_generating_random
+      Lab3_emulsiV.s:297    .text:00000000000001c0 RANDOM_NUM
+      Lab3_emulsiV.s:267    .text:000000000000018c DELAY
+      Lab3_emulsiV.s:343    .data:0000000000000038 StartMessage
+      Lab3_emulsiV.s:193    .text:00000000000000f8 PrintToScreen
+      Lab3_emulsiV.s:75     .text:0000000000000038 GenRandomNum
+      Lab3_emulsiV.s:97     .text:0000000000000058 POLLING
+      Lab3_emulsiV.s:347    .data:000000000000004a NumberHeader
+      Lab3_emulsiV.s:222    .text:000000000000012c PrintNumberToScreen
+      Lab3_emulsiV.s:122    .text:0000000000000080 display_loop
+      Lab3_emulsiV.s:129    .text:0000000000000088 subloop
+      Lab3_emulsiV.s:341    .data:0000000000000000 BootMessage
+      Lab3_emulsiV.s:199    .text:0000000000000108 loop
+      Lab3_emulsiV.s:205    .text:000000000000011c done
+      Lab3_emulsiV.s:232    .text:0000000000000148 PrintNextNumber
+      Lab3_emulsiV.s:239    .text:0000000000000160 WasNumber
+      Lab3_emulsiV.s:247    .text:0000000000000174 NumberDone
+      Lab3_emulsiV.s:272    .text:0000000000000198 outer_loop
+      Lab3_emulsiV.s:275    .text:00000000000001a0 delay_loop
+      Lab3_emulsiV.s:349    .data:0000000000000055 SEED
+      Lab3_emulsiV.s:345    .data:0000000000000043 FinishMessage
+      Lab3_emulsiV.s:356    gpio_config:0000000000000000 leds
+      Lab3_emulsiV.s:357    gpio_config:0000000000000008 sws
+      Lab3_emulsiV.s:358    gpio_config:0000000000000010 btns
+      Lab3_emulsiV.s:70     .text:0000000000000028 .L0 
+      Lab3_emulsiV.s:112    .text:000000000000006c .L0 
+      Lab3_emulsiV.s:163    .text:00000000000000b4 .L0 
+      Lab3_emulsiV.s:168    .text:00000000000000c4 .L0 
+      Lab3_emulsiV.s:304    .text:00000000000001d4 .L0 
+
+UNDEFINED SYMBOLS
+__stack_pointer
