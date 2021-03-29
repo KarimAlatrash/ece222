@@ -1,0 +1,383 @@
+GAS LISTING Lab4_emulsiV.s 			page 1
+
+
+   1              	##################################################
+   2              	## Name:    Lab4_emulsiV.s  					##
+   3              	## Purpose: Interrupts                          ##
+   4              	## Author:	Eric Praetzel	 					##
+   5              	##################################################
+   6              	
+   7              	    .text
+   8              	    .global __reset
+   9              	
+  10              	__reset:		# The reset program must start at address 0 in memory
+  11 0000 6F00C002 	    j start
+  12              	
+  13              	###########################################################################
+  14              	# The interrupt routine must start at the 4th byte in memory with emulsiV
+  15              	#
+  16              	# When an interrupt has happend - the processor will jump to this routine
+  17              	#
+  18              	# Interrupt routines should not modify any registers without saving them
+  19              	# To aid in this x6 and x7 are pushed and poped to make them available
+  20              	#
+  21              	# exit with x11 holding the new random number that is between 1 and 255
+  22              	###########################################################################
+  23              	#
+  24              	__irq:
+  25 0004 130181FF 		addi sp, sp, -8             # push x6, x7 to the stack
+  26 0008 23227100 		sw x7, 4(sp)
+  27 000c 23206100 		sw x6, 0(sp)
+  28              	
+  29 0010 23050700 	    sb x0, 10(x14)		#	Clear all event flags on the buttons - the rev (Rising Edge eVent) and fev (F
+  30 0014 23070700 	    sb x0, 14(x14)
+  31              	
+  32              	#	The random number in x11 and needs to be limited to 8-bits, if not already done so, and copied in
+  33 0018 3306B000 		add x12, x0, x11
+  34              	
+  35 001c 03230100 		lw x6, 0(sp)
+  36 0020 83234100 		lw x7, 4(sp)
+  37 0024 13018100 		addi sp, sp, 8             # pop x6, x7 from the stack
+  38 0028 73002030 	    mret		# return from interrupt
+  39              	
+  40              	################################################################################
+  41              	#  Global Variables 
+  42              	
+  43              	# Important registers in this program
+  44              	#
+  45              	#	x12 is a global variable holding the number being counted down
+  46              	#	x11 is a global variable holding the last generated random number
+  47              	
+  48              	#   x0 holds the value 0 and the name 'zero' can be used instead
+  49              	#   x1 holds the Return Address (ra) for subroutine calls and should not be used within a subroutin
+  50              	#   x2 holds the Stack Pointer (sp) and should not be used as a general register
+  51              	#   x14 = 0xD0000000 the base address for all General-purpose I/O devices to configure Direction, I
+  52              	#   x15 = 0xD0000010 the base address for General-purpose I/O _DATA_
+  53              	
+  54              	# To write to the LEDs: byte write with offsetup of zero using x15. ie 0(x15)
+  55              	
+  56              	# To read the switches byte read with an offset of 1: 1(x15) and the buttons are at offset 2 bytes.
+  57              	
+GAS LISTING Lab4_emulsiV.s 			page 2
+
+
+  58              	# the ABI register names (zero, ra, sp, gp, tp, t0, t1, t2 ...) can be used - but they ARE NOT disp
+  59              	# The simulator displays all registers with their base names of: x0, x1, x2 ... 
+  60              	################################################################################
+  61              	
+  62              	start:
+  63 002c EF00C004 		jal InitialSetup		# configure the I/O and print a welcome message - THIS NEEDS TO BE RUN BEFORE AN
+  64              	
+  65              	# Enable interrupts for the push buttons
+  66 0030 13021000 		li x4, 0x01			# There are eight bits and each bit enables interrupts for one button
+  67 0034 23034700 		sb x4, 6(x14)		# Write the enable pattern to the ien register. ie sb x4, 4(x14) would enable inter
+  68              	
+  69 0038 33060000 		add x12, zero, zero 	# initialize x12 to 0 so that the LEDs start flashing at the start
+  70              	
+  71              	# Count down the number in x12 to 0 by decrementing once every second
+  72              	# When x12 is 0, flash the LEDs on and off at ~10Hz
+  73 003c EF008001 		jal loop_showing_number
+  74              	
+  75              	flash_loop:
+  76 0040 13054006 		li x10, 100
+  77 0044 EF00C010 		jal DELAY
+  78 0048 93C2F20F 		xor x5, x5, 0xff
+  79 004c 23805700 		sb x5, 0(x15)
+  80 0050 E30806FE 		beq x12, x0, flash_loop
+  81              	
+  82              	loop_showing_number:
+  83 0054 EF000013 		jal RANDOM_NUM			# call the random number generator function - returns in x10 (a0)
+  84              	
+  85              	# put the random # into x11 for the ISR to use, possibly mask it to only 8 bits at this point
+  86 0058 9375F50F 		andi x11, x10, 0xff
+  87 005c 2380C700 		sb x12, 0(x15)			# write x12 out to the LEDs to show the number being counted down
+  88              	
+  89              	# while x12 = 0 flash on and off at ~10 Hz
+  90 0060 B302C000 	add x5, x0, x12
+  91 0064 E30E06FC 	beq x12, x0, flash_loop
+  92              	
+  93              	
+  94              	
+  95              	keep_counting_down:			# If x12 > 0 then count down, delay, and loop back
+  96 0068 1306F6FF 		addi x12, x12, -1		# decrement countdown number in x12
+  97              	
+  98 006c 1305803E 		li x10, 1000		
+  99 0070 EF00000E 		jal DELAY				# delay 1 second
+ 100              	
+ 101 0074 EFF01FFE 		jal loop_showing_number	# rinse and repeat by going back to the start to display the current numbe
+ 102              	
+ 103              	
+ 104              	
+ 105              	###################################################################################################
+ 106              	#    DO NOT EDIT CODE BELOW THIS POINT !!
+ 107              	###################################################################################################
+ 108              	#
+ 109              	################################################################################
+ 110              	#
+ 111              	# Code to to the initial setup when the program is first run
+ 112              	#
+ 113              	################################################################################
+ 114              	InitialSetup:	
+GAS LISTING Lab4_emulsiV.s 			page 3
+
+
+ 115              	
+ 116 0078 17010000 		la sp, __stack_pointer	# assign the default stack pointer address
+ 116      13010100 
+ 117              	
+ 118 0080 1301C1FF 		addi sp, sp, -4             # push the return address to the stack
+ 119 0084 23201100 		sw ra, 0(sp)				# because we're calling another subroutine and need to preserve it
+ 120              	
+ 121 0088 97020000 	    la x5, BootMessage
+ 121      93820200 
+ 122 0090 EF00C002 		jal PrintToScreen		 #Print out a bootup message
+ 123              	
+ 124              	# Setup all 8 wires to output by writing a 0x00  , 0xff turns pins into inputs
+ 125 0094 370700D0 		li x14, 0xD0000000
+ 126 0098 23000700 		sb x0, (x14)		# setup all pins to LEDs as output by writing out 0x00
+ 127 009c 1303F00F 		li t1, 0xff
+ 128 00a0 A3006700 		sb t1, 1(x14)	# Setup all pins to switches as inputs
+ 129 00a4 23016700 		sb t1, 2(x14)	# Setup all pins to buttons as inputs
+ 130              	
+ 131 00a8 B70700D0 		li x15, 0xD0000010		# S1 points to the base I/O address, offset 0 = LEDS, offset 1 = switches
+ 131      93870701 
+ 132              	
+ 133 00b0 83200100 		lw ra, 0(sp)
+ 134 00b4 13014100 		addi sp, sp, 4             # pop the return address to the stack
+ 135              	
+ 136 00b8 67800000 		jr ra		# return to sender
+ 137              	
+ 138              	################################################################################
+ 139              	# Print a message to the Text Window
+ 140              	#
+ 141              	# The message to be printed is pointed to by t0 (x5) and must be NULL terminated
+ 142              	#
+ 143              	# exits with x5 incremented to the NULL at the end of the string
+ 144              	################################################################################
+ 145              	
+ 146              	PrintToScreen:
+ 147 00bc 130181FF 		addi sp, sp, -8             # push x6, x7 to the stack
+ 148 00c0 23227100 		sw x7, 4(sp)
+ 149 00c4 23206100 		sw x6, 0(sp)
+ 150              	
+ 151 00c8 370300C0 	    li x6, 0xC0000000
+ 152              	loop:
+ 153 00cc 83C30200 	    lbu x7, (x5)			# Read a byte from the string
+ 154 00d0 63880300 	    beq x7, zero, done		# Exit if we have read the NULL (0x00) character
+ 155 00d4 23007300 	    sb x7, (x6)				# Write the character (byte) to the Text Window
+ 156 00d8 93821200 	    addi x5, x5, 1			# Incrememt the point to the next character
+ 157 00dc E30800FE 		beq zero, zero, loop
+ 158              	done:
+ 159              	
+ 160 00e0 03230100 		lw x6, 0(sp)
+ 161 00e4 83234100 		lw x7, 4(sp)
+ 162 00e8 13018100 		addi sp, sp, 8             # pop x6, x7 from the stack
+ 163 00ec 67800000 		jr ra
+ 164              	
+ 165              	################################################################################
+ 166              	# Print a number to the Text Window on a new line
+ 167              	#
+ 168              	# The 32-bit (word) number to be printed is in x5
+GAS LISTING Lab4_emulsiV.s 			page 4
+
+
+ 169              	#
+ 170              	# ASCII characters 0 to 9 are 0x30 to 0x39, A is 0x41, B is 0x42 ....
+ 171              	
+ 172              	# printing is left to right so we must start with the most signif. nibble - print the lowest 20 bit
+ 173              	################################################################################
+ 174              	
+ 175              	PrintNumberToScreen:
+ 176 00f0 130101FF 		addi sp, sp, -16	# push registers to the stack to preserve their values
+ 177 00f4 23267100 		sw x7, 12(sp)
+ 178 00f8 23244100 		sw x4, 8(sp)
+ 179 00fc 23226100 		sw x6, 4(sp)
+ 180 0100 23208100 		sw x8, 0(sp)
+ 181              	
+ 182 0104 13028000 		li x4, 8			# x4 counts down from 5 to 0, one for each charcter printed
+ 183 0108 370400C0 	    li x8, 0xC0000000	# Point to the Text Window I/O port with x8
+ 184              	
+ 185              	PrintNextNumber:
+ 186 010c 370300F0 		li x6, 0xf0000000		# Mask data to only keep the 5th nibble
+ 187 0110 B3F36200 		and x7, x5, x6		# prepare to print only the _most_ signif. nibble 0-9 or A-F
+ 188 0114 93D3C301 		srli x7, x7, 28		# shift the upper nibble down to the bottom for comparison and printing
+ 189 0118 13039000 		li x6, 9			# BLTU (Branch if less) BLEU (branch if less or equal) unsigned 
+ 190 011c 63747300 		bleu x7, x6, WasNumber
+ 191 0120 93837300 		addi x7, x7, 7		# Add 7 as the letters start 7 higher than the numbers
+ 192              	WasNumber:
+ 193 0124 93830303 		addi x7, x7, 0x30	# Add the base offset of 0x30 for ASCII character 0 as we display ASCII
+ 194 0128 23007400 	    sb x7, (x8)			# Write the character (byte) to the Text Window
+ 195              	
+ 196 012c 93924200 		slli x5, x5, 4				# shift off one nibble, 4 bits just displayed, and loop back to display what is 
+ 197 0130 1302F2FF 		addi x4, x4, -1		# Decrement character counter and test if we're done
+ 198 0134 E31C02FC 	    bne x4, zero, PrintNextNumber		# Exit if we have printed all characters
+ 199              	
+ 200              	NumberDone:
+ 201 0138 23267100 		sw x7, 12(sp)
+ 202 013c 23244100 		sw x4, 8(sp)
+ 203 0140 23226100 		sw x6, 4(sp)
+ 204 0144 23208100 		sw x8, 0(sp)
+ 205 0148 13010101 		addi sp, sp, 16		# pop x4, x6 from the stack
+ 206              	
+ 207 014c 67800000 		jr ra
+ 208              	
+ 209              	###########################################################################
+ 210              	# Input x10 (a0) set the time delay to a0 * 100uS
+ 211              	#
+ 212              	# If x10 = 0 then the time delay will be huge (2^32 * 100uS)
+ 213              	#
+ 214              	# returns with x10 = 0
+ 215              	#
+ 216              	# This is an intentionally BADLY DESIGNED timing loop - do not copy it
+ 217              	#     for Lab 1 or you have been naughty!!!
+ 218              	# 
+ 219              	################################################################################
+ 220              	DELAY:
+ 221 0150 130181FF 		addi sp, sp, -8             # push x6, x7 to the stack to preserve their values
+ 222 0154 23207100 		sw x7, 0(sp)
+ 223 0158 23226100 		sw x6, 4(sp)
+ 224              	
+ 225              		outer_loop:
+GAS LISTING Lab4_emulsiV.s 			page 5
+
+
+ 226 015c 1303A000 			li x6, 10						# 100,000 = 1 sec, so 100uS = 10 loops
+ 227 0160 93030000 			addi x7, zero, 0				# set x7 = 0 for counting up
+ 228              			delay_loop:
+ 229 0164 93831300 				addi x7, x7, 1				# decrement the delay counter
+ 230 0168 E37E73FE 				bgeu x6, x7, delay_loop	# compares the delay counter with the max, if not equal it returns to th
+ 231 016c 1305F5FF 			addi x10, x10, -1					# decrement number of delays counter
+ 232 0170 E31605FE 			bne x10, zero, outer_loop		# compares the number of delays counter with the max, if not equal it 
+ 233              	
+ 234 0174 23226100 		sw x6, 4(sp)
+ 235 0178 83230100 		lw x7, 0(sp)
+ 236 017c 13018100 		addi sp, sp, 8             # pop x6, x7 from the stack
+ 237 0180 67800000 		jr ra
+ 238              	
+ 239              	
+ 240              	
+ 241              	################################################################################
+ 242              	# Generate a random number between 1 and 0xffff
+ 243              	#
+ 244              	# Return a0 (x10) with the random number
+ 245              	#
+ 246              	# saves, uses and restores registers gp, t0, t1, t2 (x3, x5, x6, x7)
+ 247              	#
+ 248              	################################################################################
+ 249              	
+ 250              	RANDOM_NUM:
+ 251 0184 130101FF 		addi sp, sp, -16			# push t0,t1,t2 to the stack to preserve their values
+ 252 0188 23205100 		sw t0, 0(sp)
+ 253 018c 23226100 		sw t1, 4(sp)
+ 254 0190 23247100 		sw t2, 8(sp)
+ 255 0194 23263100 		sw gp, 12(sp)
+ 256              	
+ 257 0198 97010000 		la gp, SEED					# load the last random number
+ 257      93810100 
+ 258              	
+ 259 01a0 83A20100 		lw t0, 0(gp)				# load the seed or the last previously generated number from the data memory to t0
+ 260 01a4 37830000 		li t1, 0x8000
+ 261 01a8 B3F36200 		and t2, t0, t1				# mask bit 16 from the seed
+ 262 01ac 37230000 		li t1, 0x2000
+ 263 01b0 33F36200 		and t1, t0, t1				# mask bit 14 from the seed
+ 264 01b4 13132300 		slli t1, t1, 2				# allign bit 14 to be at the position of bit 16
+ 265 01b8 B3C36300 		xor t2, t2, t1				# xor bit 14 with bit 16
+ 266 01bc 37130000 		li t1, 0x1000		
+ 267 01c0 33F36200 		and t1, t0, t1				# mask bit 13 from the seed
+ 268 01c4 13133300 		slli t1, t1, 3				# allign bit 13 to be at the position of bit 16
+ 269 01c8 B3C36300 		xor t2, t2, t1				# xor bit 13 with bit 14 and bit 16
+ 270 01cc 13030040 		li t1, 0x400
+ 271 01d0 33F36200 		and t1, t0, t1				# mask bit 11 from the seed
+ 272 01d4 13135300 		slli t1, t1, 5				# allign bit 14 to be at the position of bit 16
+ 273 01d8 B3C36300 		xor t2, t2, t1				# xor bit 11 with bit 13, bit 14 and bit 16
+ 274 01dc 93D3F300 		srli t2, t2, 15				# shift the xoe result to the right to be the LSB
+ 275 01e0 93921200 		slli t0, t0, 1				# shift the seed to the left by 1
+ 276 01e4 B3E27200 		or t0, t0, t2				# add the XOR result to the shifted seed 
+ 277 01e8 37030100 		li t1, 0xFFFF				
+ 277      1303F3FF 
+ 278 01f0 B3F26200 		and t0, t0, t1				# clean the upper 16 bits to stay 0
+ 279 01f4 23A05100 		sw t0, 0(gp)				# store the generated number to the data memory to be the new seed
+ 280 01f8 13850200 		mv a0, t0					# copy t0 to a0 as a0 is always the return value of any function
+GAS LISTING Lab4_emulsiV.s 			page 6
+
+
+ 281              	
+ 282 01fc 8321C100 		lw gp, 12(sp)
+ 283 0200 83238100 		lw t2, 8(sp)
+ 284 0204 03234100 		lw t1, 4(sp)
+ 285 0208 83220100 		lw t0, 0(sp)
+ 286 020c 13010101 		addi sp, sp, 16				# pop t0,t1,t2 from the stack
+ 287              		
+ 288 0210 67800000 		jr ra
+ 289              	
+ 290              	
+ 291              	# Data for the program
+ 292              	#
+ 293              	    .data
+ 294              	BootMessage:
+ 295 0000 4C616220 	    .asciz "Lab 4 : Interrupts\nDownhill run to the finish.\n"
+ 295      34203A20 
+ 295      496E7465 
+ 295      72727570 
+ 295      74730A44 
+ 296              	StartMessage:
+ 297 0030 47655420 	    .asciz "GeT READY\n"
+ 297      52454144 
+ 297      590A00
+ 298              	FinishMessage:
+ 299 003b 446F6E65 	    .asciz "Done!\n"
+ 299      210A00
+ 300              	NumberHeader:
+ 301 0042 0A44656C 	    .asciz "\nDelay: 0x"
+ 301      61793A20 
+ 301      307800
+ 302              	SEED:
+ 303 004d 34120000 		.word 0x1234				# Put any non zero seed for the Random Number Generator - this must be writable me
+ 304              	
+ 305              	# This section below automatically enables the LED and Switch I/O  in the emulator
+ 306              	#
+ 307              	    .section gpio_config, "a"
+ 308              	
+ 309 0000 03030303 	leds: .byte 3, 3, 3, 3, 3, 3, 3, 3
+ 309      03030303 
+ 310 0008 02020202 	sws:  .byte 2, 2, 2, 2, 2, 2, 2, 2
+ 310      02020202 
+ 311 0010 01010101 	btns:  .byte 1, 1, 1, 1, 1, 1, 1, 1 
+ 311      01010101 
+ 312              	
+GAS LISTING Lab4_emulsiV.s 			page 7
+
+
+DEFINED SYMBOLS
+      Lab4_emulsiV.s:10     .text:0000000000000000 __reset
+      Lab4_emulsiV.s:62     .text:000000000000002c start
+      Lab4_emulsiV.s:24     .text:0000000000000004 __irq
+      Lab4_emulsiV.s:114    .text:0000000000000078 InitialSetup
+      Lab4_emulsiV.s:82     .text:0000000000000054 loop_showing_number
+      Lab4_emulsiV.s:75     .text:0000000000000040 flash_loop
+      Lab4_emulsiV.s:220    .text:0000000000000150 DELAY
+      Lab4_emulsiV.s:250    .text:0000000000000184 RANDOM_NUM
+      Lab4_emulsiV.s:95     .text:0000000000000068 keep_counting_down
+      Lab4_emulsiV.s:294    .data:0000000000000000 BootMessage
+      Lab4_emulsiV.s:146    .text:00000000000000bc PrintToScreen
+      Lab4_emulsiV.s:152    .text:00000000000000cc loop
+      Lab4_emulsiV.s:158    .text:00000000000000e0 done
+      Lab4_emulsiV.s:175    .text:00000000000000f0 PrintNumberToScreen
+      Lab4_emulsiV.s:185    .text:000000000000010c PrintNextNumber
+      Lab4_emulsiV.s:192    .text:0000000000000124 WasNumber
+      Lab4_emulsiV.s:200    .text:0000000000000138 NumberDone
+      Lab4_emulsiV.s:225    .text:000000000000015c outer_loop
+      Lab4_emulsiV.s:228    .text:0000000000000164 delay_loop
+      Lab4_emulsiV.s:302    .data:000000000000004d SEED
+      Lab4_emulsiV.s:296    .data:0000000000000030 StartMessage
+      Lab4_emulsiV.s:298    .data:000000000000003b FinishMessage
+      Lab4_emulsiV.s:300    .data:0000000000000042 NumberHeader
+      Lab4_emulsiV.s:309    gpio_config:0000000000000000 leds
+      Lab4_emulsiV.s:310    gpio_config:0000000000000008 sws
+      Lab4_emulsiV.s:311    gpio_config:0000000000000010 btns
+      Lab4_emulsiV.s:116    .text:0000000000000078 .L0 
+      Lab4_emulsiV.s:121    .text:0000000000000088 .L0 
+      Lab4_emulsiV.s:257    .text:0000000000000198 .L0 
+
+UNDEFINED SYMBOLS
+__stack_pointer
